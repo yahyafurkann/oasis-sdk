@@ -554,12 +554,13 @@ impl<'ctx, 'backend, 'config, C: TxContext, Cfg: Config> StackState<'config>
     }
 
     fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError> {
+        let mut ctx = self.backend.ctx.borrow_mut();
         let from = Cfg::map_address(transfer.source);
         let to = Cfg::map_address(transfer.target);
         let amount = transfer.value.as_u128();
         let amount = token::BaseUnits::new(amount, Cfg::TOKEN_DENOMINATION);
 
-        Cfg::Accounts::transfer_silent(from, to, &amount).map_err(|_| ExitError::OutOfFund)
+        Cfg::Accounts::transfer(&mut ctx, from, to, &amount).map_err(|_| ExitError::OutOfFund)
     }
 
     fn reset_balance(&mut self, _address: H160) {
