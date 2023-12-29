@@ -96,5 +96,8 @@ pub use overlay::OverlayStore;
 pub use prefix::PrefixStore;
 pub use typed::TypedStore;
 
-// Re-export the mkvs storage prefix.
-pub use oasis_core_runtime::storage::mkvs::Prefix;
+// Re-export the mkvs storage types.
+pub use oasis_core_runtime::storage::mkvs::{
+    sync::{Proof, ProofVerifier},
+    Prefix,
+};

@@ -345,6 +345,8 @@ pub trait API {
 
     /// Check whether the epoch has changed since last processed block.
     fn has_epoch_changed<C: Context>(ctx: &mut C) -> bool;
+
+    fn verify_mkvs_proof<C: Context>(ctx: &mut C, proof: &storage::Proof) -> Result<(), Error>;
 }
 
 /// Genesis state for the accounts module.
@@ -535,6 +537,11 @@ impl<Cfg: Config> API for Module<Cfg> {
 
     fn has_epoch_changed<C: Context>(ctx: &mut C) -> bool {
         *ctx.value(CONTEXT_KEY_EPOCH_CHANGED).get().unwrap_or(&false)
+    }
+
+    fn verify_mkvs_proof<C: Context>(ctx: &mut C, proof: &storage::Proof) -> Result<(), Error> {
+        let pv = storage::ProofVerifier;
+        pv.verify_proof(root, proof).map(|_| ()) // Returns NodePtrRef, which is in the mkvs::tree module, which is not public.
     }
 }
 
@@ -913,6 +920,11 @@ impl<Cfg: Config> Module<Cfg> {
 
             Ok(types::ExecuteReadOnlyTxResponse { result })
         })
+    }
+
+    #[handler(call = "core.VerifyProof", internal)]
+    fn internal_verify_proof<C: Context>(ctx: &mut C, proof: storage::Proof) -> Result<(), Error> {
+        Self::verify_mkvs_proof(ctx, &proof)
     }
 }
 
