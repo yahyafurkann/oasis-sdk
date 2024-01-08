@@ -23,6 +23,7 @@ use crate::{
     keymanager::KeyManager,
     module::MethodHandler as _,
     modules::core::Error,
+    read_syncer::HostTree,
     runtime,
     types::{address::Address, message::MessageEventHookInvocation, transaction},
 };
@@ -218,6 +219,8 @@ pub trait Context {
     /// Information about the host environment.
     fn host_info(&self) -> &HostInfo;
 
+    fn read_syncer(&self) -> &Box<dyn HostTree>;
+
     /// Runtime ID.
     fn runtime_id(&self) -> &Namespace {
         &self.host_info().runtime_id
@@ -327,6 +330,10 @@ impl<'a, 'b, C: Context> Context for std::cell::RefMut<'a, &'b mut C> {
 
     fn host_info(&self) -> &HostInfo {
         self.deref().host_info()
+    }
+
+    fn read_syncer(&self) -> &Box<dyn HostTree> {
+        self.deref().read_syncer()
     }
 
     fn key_manager(&self) -> Option<&dyn KeyManager> {
@@ -547,6 +554,7 @@ pub struct RuntimeBatchContext<'a, R: runtime::Runtime> {
     mode: Mode,
 
     host_info: &'a HostInfo,
+    read_syncer: &'a Box<dyn HostTree>,
     key_manager: Option<Box<dyn KeyManager>>,
     runtime_header: &'a roothash::Header,
     runtime_round_results: &'a roothash::RoundResults,
@@ -583,6 +591,7 @@ impl<'a, R: runtime::Runtime> RuntimeBatchContext<'a, R> {
     pub fn new(
         mode: Mode,
         host_info: &'a HostInfo,
+        read_syncer: &'a Box<dyn HostTree>,
         key_manager: Option<Box<dyn KeyManager>>,
         runtime_header: &'a roothash::Header,
         runtime_round_results: &'a roothash::RoundResults,
@@ -595,6 +604,7 @@ impl<'a, R: runtime::Runtime> RuntimeBatchContext<'a, R> {
         Self {
             mode,
             host_info,
+            read_syncer,
             runtime_header,
             runtime_round_results,
             consensus_state,
@@ -636,6 +646,7 @@ impl<'a, R: runtime::Runtime> RuntimeBatchContext<'a, R> {
         let child_ctx = RuntimeBatchContext {
             mode: Mode::PreScheduleTx,
             host_info: self.host_info,
+            read_syncer: &self.read_syncer,
             key_manager: self.key_manager.clone(),
             runtime_header: self.runtime_header,
             runtime_round_results: self.runtime_round_results,
@@ -668,6 +679,10 @@ impl<'a, R: runtime::Runtime> Context for RuntimeBatchContext<'a, R> {
 
     fn host_info(&self) -> &HostInfo {
         self.host_info
+    }
+
+    fn read_syncer(&self) -> &Box<dyn HostTree> {
+        self.read_syncer
     }
 
     fn key_manager(&self) -> Option<&dyn KeyManager> {
@@ -750,6 +765,7 @@ impl<'a, R: runtime::Runtime> Context for RuntimeBatchContext<'a, R> {
         let child_ctx = RuntimeBatchContext {
             mode,
             host_info: self.host_info,
+            read_syncer: self.read_syncer,
             key_manager: self.key_manager.clone(),
             runtime_header: self.runtime_header,
             runtime_round_results: self.runtime_round_results,
@@ -789,6 +805,7 @@ impl<'a, R: runtime::Runtime> BatchContext for RuntimeBatchContext<'a, R> {
         let tx_ctx = RuntimeTxContext {
             mode: self.mode,
             host_info: self.host_info,
+            read_syncer: self.read_syncer,
             key_manager: self.key_manager.clone(),
             runtime_header: self.runtime_header,
             runtime_round_results: self.runtime_round_results,
@@ -835,6 +852,7 @@ pub struct RuntimeTxContext<'round, 'store, R: runtime::Runtime> {
     mode: Mode,
 
     host_info: &'round HostInfo,
+    read_syncer: &'round Box<dyn HostTree>,
     key_manager: Option<Box<dyn KeyManager>>,
     runtime_header: &'round roothash::Header,
     runtime_round_results: &'round roothash::RoundResults,
@@ -893,6 +911,10 @@ impl<'round, 'store, R: runtime::Runtime> Context for RuntimeTxContext<'round, '
 
     fn host_info(&self) -> &HostInfo {
         self.host_info
+    }
+
+    fn read_syncer(&self) -> &Box<dyn HostTree> {
+        self.read_syncer
     }
 
     fn key_manager(&self) -> Option<&dyn KeyManager> {
@@ -981,6 +1003,7 @@ impl<'round, 'store, R: runtime::Runtime> Context for RuntimeTxContext<'round, '
         let child_ctx = RuntimeBatchContext {
             mode,
             host_info: self.host_info,
+            read_syncer: self.read_syncer,
             key_manager: self.key_manager.clone(),
             runtime_header: self.runtime_header,
             runtime_round_results: self.runtime_round_results,

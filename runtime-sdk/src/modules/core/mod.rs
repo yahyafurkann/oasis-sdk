@@ -6,13 +6,14 @@ use std::{
 };
 
 use anyhow::anyhow;
+use oasis_core_runtime::{common::crypto::hash, storage::mkvs::NodePtrRef};
 use oasis_runtime_sdk_macros::{handler, sdk_derive};
 use thiserror::Error;
 
 use crate::{
     callformat,
     context::{BatchContext, Context, TransactionWithMeta, TxContext},
-    core::consensus::beacon::EpochTime,
+    core::{common::crypto::hash::Hash, consensus::beacon::EpochTime},
     dispatcher,
     error::Error as SDKError,
     keymanager, migration,
@@ -146,6 +147,14 @@ pub enum Error {
     #[error("{0}")]
     #[sdk_error(transparent)]
     TxSimulationFailed(#[from] TxSimulationFailure),
+
+    #[error("proof verification failed: {0}")]
+    #[sdk_error(code = 28)]
+    ProofVerificationFailed(#[source] anyhow::Error),
+
+    #[error("getting proof failure: {0}")]
+    #[sdk_error(code = 29)]
+    GetProofFailed(#[source] anyhow::Error),
 }
 
 impl Error {
@@ -346,7 +355,17 @@ pub trait API {
     /// Check whether the epoch has changed since last processed block.
     fn has_epoch_changed<C: Context>(ctx: &mut C) -> bool;
 
-    fn verify_mkvs_proof<C: Context>(ctx: &mut C, proof: &storage::Proof) -> Result<(), Error>;
+    fn get_mkvs_proof<C: Context>(
+        ctx: &mut C,
+        root: storage::Root,
+        key: &[u8],
+    ) -> Result<storage::Proof, Error>;
+
+    fn verify_mkvs_proof<C: Context>(
+        ctx: &mut C,
+        root: Hash,
+        proof: &storage::Proof,
+    ) -> Result<NodePtrRef, Error>;
 }
 
 /// Genesis state for the accounts module.
@@ -539,9 +558,29 @@ impl<Cfg: Config> API for Module<Cfg> {
         *ctx.value(CONTEXT_KEY_EPOCH_CHANGED).get().unwrap_or(&false)
     }
 
-    fn verify_mkvs_proof<C: Context>(ctx: &mut C, proof: &storage::Proof) -> Result<(), Error> {
+    fn get_mkvs_proof<C: Context>(
+        ctx: &mut C,
+        root: storage::Root,
+        key: &[u8],
+    ) -> Result<storage::Proof, Error> {
+        // namespace, version, root-type, hash
+        // TODO: higher-level method in consensus, where one passes in:
+        // runtime-id, round, kind, key.
+        ctx.read_syncer()
+            .tree(root)
+            .get_proof(key)
+            .map(|p| p.unwrap())
+            .map_err(|e| Error::GetProofFailed(e))
+    }
+
+    fn verify_mkvs_proof<C: Context>(
+        ctx: &mut C,
+        root: Hash,
+        proof: &storage::Proof,
+    ) -> Result<NodePtrRef, Error> {
         let pv = storage::ProofVerifier;
-        pv.verify_proof(root, proof).map(|_| ()) // Returns NodePtrRef, which is in the mkvs::tree module, which is not public.
+        pv.verify_proof(root, proof)
+            .map_err(|e| Error::ProofVerificationFailed(e))
     }
 }
 
@@ -923,8 +962,11 @@ impl<Cfg: Config> Module<Cfg> {
     }
 
     #[handler(call = "core.VerifyProof", internal)]
-    fn internal_verify_proof<C: Context>(ctx: &mut C, proof: storage::Proof) -> Result<(), Error> {
-        Self::verify_mkvs_proof(ctx, &proof)
+    fn internal_verify_proof<C: Context>(
+        ctx: &mut C,
+        args: types::VerifyProofRequest,
+    ) -> Result<(), Error> {
+        Self::verify_mkvs_proof(ctx, args.root, &args.proof).map(|_| ())
     }
 }
 

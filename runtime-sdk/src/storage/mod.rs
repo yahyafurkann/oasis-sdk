@@ -99,5 +99,5 @@ pub use typed::TypedStore;
 // Re-export the mkvs storage types.
 pub use oasis_core_runtime::storage::mkvs::{
     sync::{Proof, ProofVerifier},
-    Prefix,
+    Prefix, Root,
 };

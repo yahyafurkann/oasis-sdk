@@ -8,6 +8,7 @@ use oasis_core_runtime::{
     dispatcher::{PostInitState, PreInitState},
     start_runtime,
     types::{FeatureScheduleControl, Features},
+    Protocol,
 };
 
 use crate::{
@@ -20,6 +21,7 @@ use crate::{
         TransactionHandler,
     },
     modules,
+    read_syncer::ReadSyncer,
     storage::{self, CurrentStore},
 };
 
@@ -177,6 +179,7 @@ pub trait Runtime {
                 key_manager,
                 state.consensus_verifier.clone(),
                 state.protocol.clone(),
+                Box::new(ReadSyncer::new(state.protocol.clone())),
             );
 
             PostInitState {

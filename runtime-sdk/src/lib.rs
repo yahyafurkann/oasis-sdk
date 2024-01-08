@@ -13,6 +13,7 @@ pub mod history;
 pub mod keymanager;
 pub mod module;
 pub mod modules;
+pub mod read_syncer;
 pub mod runtime;
 pub mod schedule_control;
 pub mod sender;

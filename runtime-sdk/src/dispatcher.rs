@@ -35,6 +35,7 @@ use crate::{
     module::{self, BlockHandler, MethodHandler, TransactionHandler},
     modules,
     modules::core::API as _,
+    read_syncer::{HostTree, ReadSyncer},
     runtime::Runtime,
     schedule_control::ScheduleControlHost,
     sender::SenderMeta,
@@ -130,6 +131,7 @@ pub struct Dispatcher<R: Runtime> {
     key_manager: Option<Arc<KeyManagerClient>>,
     consensus_verifier: Arc<dyn Verifier>,
     schedule_control_host: Arc<dyn ScheduleControlHost>,
+    read_syncer: Box<ReadSyncer>,
     _runtime: PhantomData<R>,
 }
 
@@ -143,12 +145,14 @@ impl<R: Runtime> Dispatcher<R> {
         key_manager: Option<Arc<KeyManagerClient>>,
         consensus_verifier: Arc<dyn Verifier>,
         schedule_control_host: Arc<dyn ScheduleControlHost>,
+        read_syncer: Box<ReadSyncer>,
     ) -> Self {
         Self {
             host_info,
             key_manager,
             consensus_verifier,
             schedule_control_host,
+            read_syncer,
             _runtime: PhantomData,
         }
     }
@@ -559,11 +563,13 @@ impl<R: Runtime> Dispatcher<R> {
             .map(|mgr| mgr.with_private_context());
         let history = self.consensus_verifier.clone();
         let rng = RootRng::new();
+        let rs: Box<dyn HostTree> = self.read_syncer.clone();
 
         let root = storage::MKVSStore::new(&mut rt_ctx.runtime_state);
         let mut ctx = RuntimeBatchContext::<'_, R>::new(
             Mode::ExecuteTx,
             &self.host_info,
+            &rs,
             key_manager,
             rt_ctx.header,
             rt_ctx.round_results,
@@ -806,11 +812,13 @@ impl<R: Runtime + Send + Sync> transaction::dispatcher::Dispatcher for Dispatche
         let key_manager = self.key_manager.as_ref().map(|mgr| mgr.with_context());
         let history = self.consensus_verifier.clone();
         let rng = RootRng::new();
+        let rs: Box<dyn HostTree> = self.read_syncer.clone();
 
         let root = storage::MKVSStore::new(&mut rt_ctx.runtime_state);
         let mut ctx = RuntimeBatchContext::<'_, R>::new(
             Mode::CheckTx,
             &self.host_info,
+            &rs,
             key_manager,
             rt_ctx.header,
             rt_ctx.round_results,
@@ -906,11 +914,13 @@ impl<R: Runtime + Send + Sync> transaction::dispatcher::Dispatcher for Dispatche
 
         // Prepare dispatch context.
         let history = self.consensus_verifier.clone();
+        let rs: Box<dyn HostTree> = self.read_syncer.clone();
 
         let root = storage::MKVSStore::new(&mut rt_ctx.runtime_state);
         let mut ctx = RuntimeBatchContext::<'_, R>::new(
             Mode::CheckTx,
             &self.host_info,
+            &rs,
             key_manager,
             rt_ctx.header,
             rt_ctx.round_results,

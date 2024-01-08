@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    core::common::crypto::hash::Hash,
     keymanager::SignedPublicKey,
+    storage,
     types::transaction::{CallResult, CallerAddress, Transaction},
 };
 
@@ -91,4 +93,11 @@ pub struct ExecuteReadOnlyTxQuery {
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ExecuteReadOnlyTxResponse {
     pub result: CallResult,
+}
+
+/// Arguments for the VerifyProof internal call.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct VerifyProofRequest {
+    pub root: Hash,
+    pub proof: storage::Proof,
 }

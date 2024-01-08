@@ -4,9 +4,10 @@ use std::collections::BTreeMap;
 use oasis_core_runtime::{
     common::{namespace::Namespace, version::Version},
     consensus::{beacon, roothash, state::ConsensusState, Event},
-    protocol::HostInfo,
+    protocol::{self, HostInfo},
     storage::mkvs,
     types::EventKind,
+    Protocol,
 };
 
 use crate::{
@@ -18,6 +19,7 @@ use crate::{
     keymanager::KeyManager,
     module::MigrationHandler,
     modules,
+    read_syncer::{self, HostTree},
     runtime::Runtime,
     storage::{CurrentStore, MKVSStore},
     testing::{configmap, keymanager::MockKeyManagerClient},
@@ -59,9 +61,20 @@ impl history::HistoryHost for EmptyHistory {
     }
 }
 
+struct EmptyHostTree;
+
+impl read_syncer::HostTree for EmptyHostTree {
+    fn tree(&self, _root: mkvs::Root) -> mkvs::Tree {
+        mkvs::Tree::builder()
+            .with_root_type(mkvs::RootType::State)
+            .build(Box::new(mkvs::sync::NoopReadSyncer))
+    }
+}
+
 /// Mock dispatch context factory.
 pub struct Mock {
     pub host_info: HostInfo,
+    pub read_syncer: Box<dyn HostTree>,
     pub runtime_header: roothash::Header,
     pub runtime_round_results: roothash::RoundResults,
     pub consensus_state: ConsensusState,
@@ -91,6 +104,7 @@ impl Mock {
         RuntimeBatchContext::new(
             mode,
             &self.host_info,
+            &self.read_syncer,
             if confidential {
                 Some(Box::new(MockKeyManagerClient::new()) as Box<dyn KeyManager>)
             } else {
@@ -116,6 +130,8 @@ impl Mock {
             .with_root_type(mkvs::RootType::State)
             .build(Box::new(mkvs::sync::NoopReadSyncer));
 
+        let read_syncer: Box<dyn HostTree> = Box::new(EmptyHostTree);
+
         Self {
             host_info: HostInfo {
                 runtime_id: Namespace::default(),
@@ -124,6 +140,7 @@ impl Mock {
                 consensus_chain_context: "test".to_string(),
                 local_config,
             },
+            read_syncer: read_syncer,
             runtime_header: roothash::Header::default(),
             runtime_round_results: roothash::RoundResults::default(),
             consensus_state: ConsensusState::new(1, consensus_tree),
